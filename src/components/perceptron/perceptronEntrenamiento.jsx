@@ -9,6 +9,7 @@ import {
   Button,
   FormControl,
   InputLabel,
+  Input,
   NativeSelect,
   Select,
   MenuItem,
@@ -104,6 +105,7 @@ function PerceptronEntrenamiento() {
   const [uActual, setUActual] = useState([]);
   const [wOld, setWOld] = useState([]);
   const [uOld, setUOld] = useState([]);
+  const [jsonData, setJsonData] = useState(null);
 
   function cargarBancoDatos(dataRed) {
     setNEntradas(json.entrada[0].length);
@@ -254,9 +256,9 @@ function PerceptronEntrenamiento() {
     }
   };
 
-  const modificarPesos = (w, x, y, e, r, s) => {    
-    var newPesos=new Array(w);
-    console.log("old",newPesos);
+  const modificarPesos = (w, x, y, e, r, s) => {
+    var newPesos = new Array(w);
+    console.log("old", newPesos);
     for (let i = 0; i < y; i++) {
       for (let j = 0; j < x.length; j++) {
         if (s) {
@@ -266,7 +268,7 @@ function PerceptronEntrenamiento() {
         }
       }
     }
-    console.log("new",newPesos);
+    console.log("new", newPesos);
   };
 
   const modificarPersosUmbrales = (dataRed, eLineal, ePatron, patron) => {
@@ -285,7 +287,7 @@ function PerceptronEntrenamiento() {
               true
             );
           } else {
-            console.log(wActual.capa0.pesos)
+            console.log(wActual.capa0.pesos);
             modificarPesos(
               wActual.capa0.pesos,
               patron,
@@ -465,6 +467,17 @@ function PerceptronEntrenamiento() {
     onSubmit: handleSubmit,
   });
 
+  const changeBancoDatos = (e) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(e.target.files[0]);
+    reader.onload = (e) => {
+      e.preventDefault();
+      const content = e.target.result.toString();
+      const data = JSON.parse(atob(content.split(",")[1]))
+      setJsonData(data)
+    };
+  };
+
   return (
     <div>
       <Box sx={{ flexGrow: 1 }}>
@@ -552,7 +565,16 @@ function PerceptronEntrenamiento() {
                           ) : null}
                         </Grid>
                         <Grid item xs={12} md={4} xl={12} className={"input"}>
-                          <Button
+                          <label htmlFor="contained-button-file">
+                            <Input
+                              accept="image/*"
+                              id="contained-button-file"
+                              multiple
+                              type="file"
+                              onChange={(e) => changeBancoDatos(e)}
+                            />
+                          </label>
+                          {/* <Button
                             fullWidth
                             variant="contained"
                             component="label"
@@ -566,7 +588,8 @@ function PerceptronEntrenamiento() {
                               value={formik.values.banco_datos}
                               hidden
                             />
-                          </Button>
+                          </Button> */}
+
                           {formik.errors.banco_datos &&
                           formik.touched.banco_datos ? (
                             <div className={"warning"}>
