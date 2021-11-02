@@ -3,22 +3,22 @@ import React from "react";
 import { Bar, Line } from "react-chartjs-2";
 import { Typography } from "@mui/material";
 
-const Grafica = () => {
+const Grafica = ({titels,values}) => {
   return (
     <div className={"panel shadow mleft10"}>
       <div className="header">
         <Typography variant="h6" className={"title"}>
-          Grafica ERMS
+          Grafica ERMS 
         </Typography>
       </div>
       <div className="inside">
         <Line
           data={{
-            labels: ["0", "1", "2", "3", "4", "5","6"],
+            labels: titels,
             datasets: [
               {
                 label: "ERMS",
-                data: [1, 0.5, 0.3, 0.5, 0.2, 0.3,0.3],
+                data: values,
                 backgroundColor: [
                   "rgba(255, 99, 132, 0.2)",
                   "rgba(54, 162, 235, 0.2)",

@@ -1,8 +1,6 @@
 import { React, useState } from "react";
-import { styled } from "@mui/material/styles";
 import {
   Box,
-  Paper,
   Grid,
   TextField,
   Typography,
@@ -10,25 +8,23 @@ import {
   FormControl,
   InputLabel,
   NativeSelect,
-  Select,
-  MenuItem,
-  Divider,
 } from "@mui/material";
 import { useFormik } from "formik";
 import * as Yup from "yup";
 import * as json from "./../../jsons/punto1.json";
 import Grafica from "../grafica.jsx";
+import { Bar, Line } from "react-chartjs-2";
 
 const validationSchema = Yup.object().shape({
   numero_iteracciones: Yup.number()
     .min(1, "Ingrese una cantidad válida.  ")
     .required("Número de iteracciones es requerido."),
   error_max: Yup.number()
-    .min(0, "Ingrese un valor entre 0 y 1.")
+    .min(0.00001, "Ingrese un valor entre 0 y 1.")
     .max(1, "Ingrese un valor entre 0 y 1.")
     .required("Error maximo permitido requerido."),
   rata_aprendizaje: Yup.number()
-    .min(0, "ingrese un valor mayor a 0.")
+    .min(0.00001, "ingrese un valor mayor a 0.")
     .required("Rata de aprendizaje requerida."),
   banco_datos: Yup.string()
     .min(4, "Seleccione un arvhivo válido.")
@@ -91,8 +87,21 @@ let ws = [];
 let us = [];
 let wsOld = [];
 let usOld = [];
+let wActual = [];
+let uActual = [];
+let yValue = new Array();
+let xValue = new Array();
+let iteracciones = 0;
+let endErms = 0;
+let redEntrenada = "NO";
 
 function PerceptronEntrenamiento() {
+  function setWActual(w) {
+    wActual = w;
+  }
+  function setUActual(u) {
+    uActual = u;
+  }
   const [capas, setCapas] = useState(1);
 
   const [data, setData] = useState([]);
@@ -100,8 +109,8 @@ function PerceptronEntrenamiento() {
   const [nEntradad, setNEntradas] = useState(0);
   const [nSalidas, setNSalidas] = useState(0);
   const [nPatrones, setNPatrones] = useState(0);
-  const [wActual, setWActual] = useState([]);
-  const [uActual, setUActual] = useState([]);
+  const [xIteraccion, setXIteraccion] = useState(["1"]);
+  const [yErms, setYErms] = useState([0]);
   const [wOld, setWOld] = useState([]);
   const [uOld, setUOld] = useState([]);
 
@@ -121,18 +130,22 @@ function PerceptronEntrenamiento() {
     let eLineal = [];
     let ePatron = [];
     while (
-      iteraccion < dataRed.numero_iteracciones &&
+      iteraccion <= dataRed.numero_iteracciones &&
       erms > dataRed.error_max
     ) {
       iteraccion = iteraccion + 1;
       erms = 0;
+      console.log("ITERACCION: ", iteraccion);
       for (let p = 0; p < nPatrones; p++) {
         //Calcular salida d ela funcion soma
         for (let capa = 0; capa <= dataRed.numero_capas_ocultas; capa++) {
+          //console.log("Capa actual: ",capa)
+          //console.log("Salida funcionActivacion",sFuncionSoma);
+          //console.log(`capa${capa}`);
           switch (capa) {
             case 0:
               if (capa == dataRed.numero_capas_ocultas) {
-                sFuncionSoma[`capa${capa}`] = suma(
+                sFuncionSoma[`capaSalida`] = suma(
                   json.entrada[p],
                   nSalidas,
                   wActual.capa0.pesos,
@@ -149,7 +162,7 @@ function PerceptronEntrenamiento() {
               break;
             case 1:
               if (capa == dataRed.numero_capas_ocultas) {
-                sFuncionSoma[`capa${capa}`] = suma(
+                sFuncionSoma[`capaSalida`] = suma(
                   sFuncionSoma.capa0,
                   nSalidas,
                   wActual.capa1.pesos,
@@ -166,7 +179,7 @@ function PerceptronEntrenamiento() {
               break;
             case 2:
               if (capa == dataRed.numero_capas_ocultas) {
-                sFuncionSoma[`capa${capa}`] = suma(
+                sFuncionSoma[`capaSalida`] = suma(
                   sFuncionSoma.capa1,
                   nSalidas,
                   wActual.capa1.pesos,
@@ -183,7 +196,7 @@ function PerceptronEntrenamiento() {
               break;
             case 3:
               if (capa == dataRed.numero_capas_ocultas) {
-                sFuncionSoma[`capa${capa}`] = suma(
+                sFuncionSoma[`capaSalida`] = suma(
                   sFuncionSoma.capa2,
                   nSalidas,
                   wActual.capa3.pesos,
@@ -200,7 +213,7 @@ function PerceptronEntrenamiento() {
               break;
             case 4:
               if (capa == dataRed.numero_capas_ocultas) {
-                sFuncionSoma[`capa${capa}`] = suma(
+                sFuncionSoma[`capaSalida`] = suma(
                   sFuncionSoma.capa3,
                   nSalidas,
                   wActual.capa4.pesos,
@@ -216,7 +229,7 @@ function PerceptronEntrenamiento() {
               }
               break;
             case 5:
-              sFuncionSoma[`capa${capa}`] = suma(
+              sFuncionSoma[`capaSalida`] = suma(
                 sFuncionSoma.capa4,
                 nSalidas,
                 wActual.capa5.pesos,
@@ -225,13 +238,15 @@ function PerceptronEntrenamiento() {
               break;
             default:
               console.log("Mal");
+              break;
           }
         }
+        //console.log("SALIDA SUMA::",sFuncionSoma);
         //Calcular error lineal
         for (let i = 0; i < nSalidas; i++) {
+          //console.log("SALIDA: ",json.salida[p][i]);
           eLineal[i] =
-            json.salida[p][i] -
-            Math.abs(sFuncionSoma[`capa${dataRed.numero_capas_ocultas}`][i]);
+            json.salida[p][i] - Math.abs(sFuncionSoma.capaSalida.s[i]);
         }
         //Calcular error del patron
         ePatron[p] = 0;
@@ -241,7 +256,7 @@ function PerceptronEntrenamiento() {
         ePatron[p] = ePatron[p] / nSalidas;
         erms = erms + ePatron[p];
 
-        if (ePatron[p] > dataRed.error_max) {
+        if (ePatron[p] >= dataRed.error_max) {
           modificarPersosUmbrales(
             dataRed,
             eLineal,
@@ -250,33 +265,51 @@ function PerceptronEntrenamiento() {
           );
         }
       }
+      console.log(erms, "/", nPatrones);
       erms = erms / nPatrones;
+      console.log("Erms:", erms);
     }
   };
 
-  const modificarPesos = (w, x, y, e, r, s) => {    
-    var newPesos=new Array(w);
-    console.log("old",newPesos);
+  const modificarPesos = (w, x, y, e, r, s) => {
+    let newPeso = 0;
+    let pesos = [];
     for (let i = 0; i < y; i++) {
+      pesos[i] = new Array();
       for (let j = 0; j < x.length; j++) {
         if (s) {
-          newPesos[i][j] = w[i][j] + r * e[i] * x[j];
+          newPeso = w[i][j] + r * e[i] * x[j];
         } else {
-          newPesos[i][j] = w[i][j] + r * e * x[j];
+          newPeso = w[i][j] + r * e * x[j];
         }
+        pesos[i][j] = newPeso;
       }
     }
-    console.log("new",newPesos);
+    return pesos;
+  };
+
+  const modificarUmbrales = (u, y, e, r, s) => {
+    let umbrales = [];
+    for (let i = 0; i < y; i++) {
+      if (s) {
+        umbrales[i] = u[i] + r * e[i];
+      } else {
+        umbrales[i] = u[i] + r * e;
+      }
+    }
+    return umbrales;
   };
 
   const modificarPersosUmbrales = (dataRed, eLineal, ePatron, patron) => {
+    let newWs = [];
+    let newUs = [];
     for (let i = 0; i <= dataRed.numero_capas_ocultas; i++) {
-      var pesos = new Array(wActual);
-      var umbrales = new Array(uActual);
+      let pesos = new Array();
+      let umbrales = new Array();
       switch (i) {
         case 0:
           if (i == dataRed.numero_capas_ocultas) {
-            modificarPesos(
+            pesos = modificarPesos(
               wActual.capa0.pesos,
               patron,
               nSalidas,
@@ -284,11 +317,24 @@ function PerceptronEntrenamiento() {
               dataRed.rata_aprendizaje,
               true
             );
+            umbrales = modificarUmbrales(
+              uActual.capa0.umbrales,
+              nSalidas,
+              eLineal,
+              dataRed.rata_aprendizaje,
+              true
+            );
           } else {
-            console.log(wActual.capa0.pesos)
-            modificarPesos(
+            pesos = modificarPesos(
               wActual.capa0.pesos,
               patron,
+              dataRed.numero_neuronas_capa_1,
+              ePatron,
+              dataRed.rata_aprendizaje,
+              false
+            );
+            umbrales = modificarUmbrales(
+              uActual.capa0.umbrales,
               dataRed.numero_neuronas_capa_1,
               ePatron,
               dataRed.rata_aprendizaje,
@@ -297,19 +343,173 @@ function PerceptronEntrenamiento() {
           }
           break;
         case 1:
+          if (i == dataRed.numero_capas_ocultas) {
+            pesos = modificarPesos(
+              wActual.capa1.pesos,
+              patron,
+              nSalidas,
+              eLineal,
+              dataRed.rata_aprendizaje,
+              true
+            );
+            umbrales = modificarUmbrales(
+              uActual.capa1.umbrales,
+              nSalidas,
+              ePatron,
+              dataRed.rata_aprendizaje,
+              true
+            );
+          } else {
+            pesos = modificarPesos(
+              wActual.capa1.pesos,
+              patron,
+              dataRed.numero_neuronas_capa_2,
+              ePatron,
+              dataRed.rata_aprendizaje,
+              false
+            );
+            umbrales = modificarUmbrales(
+              uActual.capa1.umbrales,
+              dataRed.numero_neuronas_capa_2,
+              ePatron,
+              dataRed.rata_aprendizaje,
+              false
+            );
+          }
           break;
         case 2:
+          if (i == dataRed.numero_capas_ocultas) {
+            pesos = modificarPesos(
+              wActual.capa2.pesos,
+              patron,
+              nSalidas,
+              eLineal,
+              dataRed.rata_aprendizaje,
+              true
+            );
+            umbrales = modificarUmbrales(
+              uActual.capa2.umbrales,
+              nSalidas,
+              ePatron,
+              dataRed.rata_aprendizaje,
+              true
+            );
+          } else {
+            console.log(wActual.capa2.pesos);
+            pesos = modificarPesos(
+              wActual.capa2.pesos,
+              patron,
+              dataRed.numero_neuronas_capa_3,
+              ePatron,
+              dataRed.rata_aprendizaje,
+              false
+            );
+            umbrales = modificarUmbrales(
+              uActual.capa2.umbrales,
+              dataRed.numero_neuronas_capa_3,
+              ePatron,
+              dataRed.rata_aprendizaje,
+              false
+            );
+          }
           break;
         case 3:
+          if (i == dataRed.numero_capas_ocultas) {
+            pesos = modificarPesos(
+              wActual.capa3.pesos,
+              patron,
+              nSalidas,
+              eLineal,
+              dataRed.rata_aprendizaje,
+              true
+            );
+            umbrales = modificarUmbrales(
+              uActual.capa3.umbrales,
+              nSalidas,
+              ePatron,
+              dataRed.rata_aprendizaje,
+              true
+            );
+          } else {
+            pesos = modificarPesos(
+              wActual.capa3.pesos,
+              patron,
+              dataRed.numero_neuronas_capa_4,
+              ePatron,
+              dataRed.rata_aprendizaje,
+              false
+            );
+            umbrales = modificarUmbrales(
+              uActual.capa3.umbrales,
+              dataRed.numero_neuronas_capa_4,
+              ePatron,
+              dataRed.rata_aprendizaje,
+              false
+            );
+          }
           break;
         case 4:
+          if (i == dataRed.numero_capas_ocultas) {
+            pesos = modificarPesos(
+              wActual.capa4.pesos,
+              patron,
+              nSalidas,
+              eLineal,
+              dataRed.rata_aprendizaje,
+              true
+            );
+            umbrales = modificarUmbrales(
+              uActual.capa4.umbrales,
+              nSalidas,
+              ePatron,
+              dataRed.rata_aprendizaje,
+              true
+            );
+          } else {
+            pesos = modificarPesos(
+              wActual.capa4.pesos,
+              patron,
+              dataRed.numero_neuronas_capa_5,
+              ePatron,
+              dataRed.rata_aprendizaje,
+              false
+            );
+            umbrales = modificarUmbrales(
+              uActual.capa4.umbrales,
+              dataRed.numero_neuronas_capa_5,
+              ePatron,
+              dataRed.rata_aprendizaje,
+              false
+            );
+          }
           break;
         case 5:
+          pesos = modificarPesos(
+            wActual.capa5.pesos,
+            patron,
+            nSalidas,
+            eLineal,
+            dataRed.rata_aprendizaje,
+            true
+          );
+          umbrales = modificarUmbrales(
+            uActual.capa5.umbrales,
+            nSalidas,
+            ePatron,
+            dataRed.rata_aprendizaje,
+            true
+          );
           break;
         default:
           break;
       }
+      newWs[`capa${i}`] = { pesos };
+      newUs[`capa${i}`] = { umbrales };
     }
+    //setWOld(wActual);
+    setWActual(newWs);
+    setWActual(newUs);
+    //console.log("UMBLARES: ",uActual);
   };
 
   const suma = (x, y, w, u) => {
@@ -321,7 +521,7 @@ function PerceptronEntrenamiento() {
       }
       s[i] = Math.tanh(s[i]);
     }
-    return s;
+    return { s };
   };
 
   function numeroAleatorioDecimales(max, min) {
@@ -424,7 +624,7 @@ function PerceptronEntrenamiento() {
     setWOld(ws);
     setUActual(us);
     setUOld(us);
-    console.log(wActual, uActual);
+    //console.log("Creacion",wActual, uActual);
   }
 
   const handleSubmit = (dataRed, { reserForm }) => {
@@ -436,9 +636,418 @@ function PerceptronEntrenamiento() {
   const handleEntrenar = (dataRed) => {
     setData(dataRed);
     cargarBancoDatos(dataRed);
-    cargarPesosUmbrales(dataRed);
-    entrenamiento(dataRed);
-    console.log("Entrenando");
+    handdleTraining(dataRed);
+    //cargarPesosUmbrales(dataRed);
+    //entrenamiento(dataRed);
+  };
+
+  const handleW = (x, y, dataConfig) => {
+    let m = [];
+    for (let i = 0; i <= dataConfig.numero_capas_ocultas; i++) {
+      switch (i) {
+        case 0:
+          if (i == dataConfig.numero_capas_ocultas) {
+            m[i] = generateW(x, y);
+          } else {
+            m[i] = generateW(x, dataConfig.numero_neuronas_capa_1);
+          }
+          break;
+        case 1:
+          if (i == dataConfig.numero_capas_ocultas) {
+            m[i] = generateW(dataConfig.numero_neuronas_capa_1, y);
+          } else {
+            m[i] = generateW(
+              dataConfig.numero_neuronas_capa_1,
+              dataConfig.numero_neuronas_capa_2
+            );
+          }
+          break;
+        case 2:
+          if (i == dataConfig.numero_capas_ocultas) {
+            m[i] = generateW(dataConfig.numero_neuronas_capa_2, y);
+          } else {
+            m[i] = generateW(
+              dataConfig.numero_neuronas_capa_2,
+              dataConfig.numero_neuronas_capa_3
+            );
+          }
+          break;
+        default:
+          console.log("PESOS ERROR");
+          break;
+      }
+    }
+    return m;
+  };
+
+  const handleU = (y, dataConfig) => {
+    let m = [];
+    for (let i = 0; i <= dataConfig.numero_capas_ocultas; i++) {
+      switch (i) {
+        case 0:
+          if (i == dataConfig.numero_capas_ocultas) {
+            m[i] = generateU(y);
+          } else {
+            m[i] = generateU(dataConfig.numero_neuronas_capa_1);
+          }
+          break;
+        case 1:
+          if (i == dataConfig.numero_capas_ocultas) {
+            m[i] = generateU(y);
+          } else {
+            m[i] = generateU(dataConfig.numero_neuronas_capa_2);
+          }
+          break;
+        case 2:
+          if (i == dataConfig.numero_capas_ocultas) {
+            m[i] = generateU(y);
+          } else {
+            m[i] = generateU(dataConfig.numero_neuronas_capa_3);
+          }
+          break;
+        default:
+          console.log("UMBRALES ERROR");
+      }
+    }
+    return m;
+  };
+
+  const generateW = (x, y) => {
+    let gw = [];
+    for (let gwi = 0; gwi < y; gwi++) {
+      gw[gwi] = new Array();
+      for (let gwj = 0; gwj < x; gwj++) {
+        gw[gwi][gwj] = Math.random() * (1 - -1) + -1;
+      }
+    }
+    return gw;
+  };
+
+  const generateU = (y) => {
+    let gu = [];
+    for (let gui = 0; gui < y; gui++) {
+      gu[gui] = Math.random() * (1 - -1) + -1;
+    }
+    return gu;
+  };
+
+  const handleS = (x, y, pt, we, ue, dataConfig) => {
+    let m = [];
+    for (let i = 0; i <= dataConfig.numero_capas_ocultas; i++) {
+      switch (i) {
+        case 0:
+          if (i == dataConfig.numero_capas_ocultas) {
+            m[i] = getS(x, y, pt, we[i], ue[i]);
+          } else {
+            m[i] = getS(x, dataConfig.numero_neuronas_capa_1, pt, we[i], ue[i]);
+          }
+          break;
+        case 1:
+          if (i == dataConfig.numero_capas_ocultas) {
+            m[i] = getS(m[0].length, y, m[0], we[i], ue[i]);
+          } else {
+            m[i] = getS(
+              m[0].length,
+              dataConfig.numero_neuronas_capa_2,
+              m[0],
+              we[i],
+              ue[i]
+            );
+          }
+          break;
+        case 2:
+          if (i == dataConfig.numero_capas_ocultas) {
+            m[i] = getS(m[1].length, y, m[0], we[i], ue[i]);
+          } else {
+            m[i] = getS(
+              m[1].length,
+              dataConfig.numero_neuronas_capa_3,
+              m[0],
+              we[i],
+              ue[i]
+            );
+          }
+          break;
+        default:
+          console.log("ERROS EN SUMA");
+          break;
+      }
+    }
+    return m;
+  };
+
+  const getS = (x, y, pt, we, ue) => {
+    let gs = [];
+    //console.log(x, y, pt, we, ue);
+    for (let gsi = 0; gsi < y; gsi++) {
+      gs[gsi] = 0;
+      for (let gsj = 0; gsj < x; gsj++) {
+        gs[gsi] = gs[gsi] + (pt[gsj] * we[gsi][gsj] + ue[gsi]);
+      }
+      gs[gsi] = Math.tanh(gs[gsi]);
+    }
+    //console.log("SUMA: ",gs);
+    return gs;
+  };
+
+  const handleEL = (y, yr, yd) => {
+    let m = [];
+    for (let eli = 0; eli < y; eli++) {
+      m[eli] = yd[eli] - yr[eli];
+    }
+    //console.log(m);
+    return m;
+  };
+
+  const handleEP = (y, el) => {
+    let gep = 0;
+    for (let epi = 0; epi < y; epi++) {
+      gep = gep + Math.abs(el[epi]);
+    }
+    gep = gep / y;
+    //console.log("EP: ",gep);
+    return gep;
+  };
+
+  const updateW = (x, y, we, ra, ep, el, pt, se, dataConfig) => {
+    let m = [];
+    for (let i = 0; i <= dataConfig.numero_capas_ocultas; i++) {
+      switch (i) {
+        case 0:
+          if (i == dataConfig.numero_capas_ocultas) {
+            m[i] = getUpdateW(x, y, we[i], ra, el, pt, true);
+          } else {
+            m[i] = getUpdateW(
+              x,
+              dataConfig.numero_neuronas_capa_1,
+              we[i],
+              ra,
+              ep,
+              pt,
+              false
+            );
+          }
+          break;
+        case 1:
+          if (i == dataConfig.numero_capas_ocultas) {
+            m[i] = getUpdateW(
+              dataConfig.numero_neuronas_capa_1,
+              y,
+              we[i],
+              ra,
+              el,
+              se[0],
+              true
+            );
+          } else {
+            m[i] = getUpdateW(
+              dataConfig.numero_neuronas_capa_1,
+              dataConfig.numero_neuronas_capa_2,
+              we[i],
+              ra,
+              ep,
+              se[0],
+              false
+            );
+          }
+          break;
+        case 2:
+          if (i == dataConfig.numero_capas_ocultas) {
+            m[i] = getUpdateW(
+              dataConfig.numero_neuronas_capa_2,
+              y,
+              we[i],
+              ra,
+              el,
+              se[1],
+              true
+            );
+          } else {
+            m[i] = getUpdateW(
+              dataConfig.numero_neuronas_capa_2,
+              dataConfig.numero_neuronas_capa_3,
+              we[i],
+              ra,
+              ep,
+              se[1],
+              false
+            );
+          }
+          break;
+        default:
+          console.log("UPDATE PESOS ERROR");
+      }
+    }
+    //console.log("M: ",m);
+    return m;
+  };
+
+  const getUpdateW = (x, y, we, ra, e, pt, isEnd) => {
+    let ugw = [];
+    for (let gwi = 0; gwi < y; gwi++) {
+      ugw[gwi] = new Array();
+      for (let gwj = 0; gwj < x; gwj++) {
+        if (isEnd) {
+          ugw[gwi][gwj] = we[gwi][gwj] + ra * e[gwi] * pt[gwj];
+        } else {
+          ugw[gwi][gwj] = we[gwi][gwj] + ra * e * pt[gwj];
+        }
+      }
+    }
+    //console.log("NEW W:", ugw);
+    return ugw;
+  };
+
+  const updateU = (y, ue, ra, ep, el, dataConfig) => {
+    let m = [];
+    for (let i = 0; i <= dataConfig.numero_capas_ocultas; i++) {
+      switch (i) {
+        case 0:
+          if (i == dataConfig.numero_capas_ocultas) {
+            m[i] = getUpdateU(y, ue[i], ra, el, true);
+          } else {
+            m[i] = getUpdateU(
+              dataConfig.numero_neuronas_capa_1,
+              ue[i],
+              ra,
+              ep,
+              false
+            );
+          }
+          break;
+        case 1:
+          if (i == dataConfig.numero_capas_ocultas) {
+            m[i] = getUpdateU(y, ue[i], ra, el, true);
+          } else {
+            m[i] = getUpdateU(
+              dataConfig.numero_neuronas_capa_2,
+              ue[i],
+              ra,
+              ep,
+              false
+            );
+          }
+          break;
+        case 2:
+          if (i == dataConfig.numero_capas_ocultas) {
+            m[i] = getUpdateU(y, ue[i], ra, el, true);
+          } else {
+            m[i] = getUpdateU(
+              dataConfig.numero_neuronas_capa_3,
+              ue[i],
+              ra,
+              ep,
+              false
+            );
+          }
+          break;
+        default:
+          console.log("UPDATE UMBRALES ERROR");
+      }
+    }
+    //console.log("M: ",m);
+    return m;
+  };
+
+  const getUpdateU = (y, ue, ra, e, isEnd) => {
+    let ugu = [];
+    for (let gui = 0; gui < y; gui++) {
+      if (isEnd) {
+        ugu[gui] = ue[gui] + ra * e[gui];
+      } else {
+        ugu[gui] = ue[gui] + ra * e;
+      }
+    }
+    //console.log("NEW W:", ugw);
+    return ugu;
+  };
+
+  const handdleTraining = async (dataRed) => {
+    let numberIn = json.entrada[0].length;
+    let numberOut = json.salida[0].length;
+    let numberPatters = json.entrada.length;
+    let w = handleW(numberIn, numberOut, dataRed);
+    let u = handleU(numberOut, dataRed);
+    let s = [];
+    let erms = 2;
+    let iteraccion = 0;
+    let errorPatters = [];
+    yValue = [];
+    xValue = [];
+    //console.log("INIT W: ", w);
+    //console.log("INIT U: ", u);
+    while (
+      iteraccion < dataRed.numero_iteracciones &&
+      erms > dataRed.error_max
+    ) {
+      iteraccion = iteraccion + 1;
+      xValue[iteraccion] = iteraccion + "";
+      for (let p = 0; p < numberPatters; p++) {
+        //console.log("PATRON #", p, ": ", json.entrada[p]);
+        //CaLCULAMOS LA SALIDA DE LA FUNCION SOMA MAS FUNCION DE ACTIVACION
+        s = handleS(numberIn, numberOut, json.entrada[p], w, u, dataRed);
+        //console.log("S: ",s);
+        //CALCULAMOS EL ERROR LINEAL
+        let errorLineal = handleEL(
+          numberOut,
+          s[dataRed.numero_capas_ocultas],
+          json.salida[p]
+        );
+        //console.log("EL: ", errorLineal);
+        //CALCULAMOS EL ERROR DEL PATRON
+        errorPatters[p] = handleEP(numberOut, errorLineal);
+        //VALIDAMOS SI MODIFICAMOS PESOS
+        if (errorPatters[p] > dataRed.error_max) {
+          //console.log("MODIFICAR PESOS Y UMBRALES");
+          //console.log("W: ", w);
+          //console.log("U: ", u);
+          //console.log("I: ", iteraccion);
+          w = updateW(
+            numberIn,
+            numberOut,
+            w,
+            dataRed.rata_aprendizaje,
+            errorPatters[p],
+            errorLineal,
+            json.entrada[p],
+            s,
+            dataRed
+          );
+          u = updateU(
+            numberOut,
+            u,
+            dataRed.rata_aprendizaje,
+            errorPatters[p],
+            errorLineal,
+            dataRed
+          );
+          //console.log("NEW W: ", w);
+          //console.log("NEW U: ", u);
+        }
+      }
+      //console.log("EP: ",errorPatters);
+      erms = 0;
+      for (let p = 0; p < numberPatters; p++) {
+        erms = erms + errorPatters[p];
+      }
+      erms = erms / numberPatters;
+      yValue[iteraccion] = erms;
+      endErms = erms;
+      iteracciones = iteraccion;
+    }
+    setYErms(yValue);
+    setXIteraccion(xValue);
+    console.log("Y: ", yValue);
+    console.log("X: ", xValue);
+    console.log("ERMS: ", erms);
+    console.log("EP: ", errorPatters);
+    console.log("END W: ", w);
+    if (erms > dataRed.error_max) {
+      redEntrenada = "NO";
+    } else {
+      redEntrenada = "SI";
+    }
+    await console.log("END U: ", u);
   };
 
   const formik = useFormik({
@@ -981,7 +1590,7 @@ function PerceptronEntrenamiento() {
                 <div className={"panel shadow"}>
                   <div className={"header"}>
                     <Typography variant="h6" className={"title"}>
-                      Datos de la red
+                      Datos del entrenamiento
                     </Typography>
                   </div>
                   <div className={"inside"}>
@@ -1025,39 +1634,58 @@ function PerceptronEntrenamiento() {
                   </div>
                   <div className={"inside"}>
                     <Typography variant="subtitle2">
-                      Red entrenada: {formik.values.numero_iteracciones}
+                      Iteracciones realizadas: {iteracciones}
                     </Typography>
                     <Typography variant="subtitle2">
-                      Iteracciones realizadas: {formik.values.error_max}
+                      Error ERMS final: {endErms}
                     </Typography>
                     <Typography variant="subtitle2">
-                      Rata de aprendizaje: {formik.values.rata_aprendizaje}
-                    </Typography>
-                    <Typography variant="subtitle2">
-                      Número de entradas: {nEntradad}
-                    </Typography>
-                    <Typography variant="subtitle2">
-                      Número de salidas: {nSalidas}
-                    </Typography>
-                    <Typography variant="subtitle2">
-                      Número de patrones: {nPatrones}
-                    </Typography>
-                    <Typography variant="subtitle2">
-                      Función de activación: {formik.values.funcion_activacion}
-                    </Typography>
-                    <Typography variant="subtitle2">
-                      Algoritmo de entrenamiento:{" "}
-                      {formik.values.algoritmo_entrenamiento}
-                    </Typography>
-                    <Typography variant="subtitle2">
-                      Número de capas ocultas:{" "}
-                      {formik.values.numero_capas_ocultas}
+                      Red entrenada?: {redEntrenada}
                     </Typography>
                   </div>
                 </div>
               </Grid>
               <Grid item xs={12} md={6} xl={8}>
-                <Grafica></Grafica>
+                <div className={"panel shadow mleft10"}>
+                  <div className="header">
+                    <Typography variant="h6" className={"title"}>
+                      Grafica ERMS
+                    </Typography>
+                  </div>
+                  <div className="inside">
+                    <Line
+                      data={{
+                        labels: xValue,
+                        datasets: [
+                          {
+                            label: "ERMS",
+                            data: yValue,
+                            backgroundColor: [
+                              "rgba(255, 99, 132, 0.2)",
+                              "rgba(54, 162, 235, 0.2)",
+                              "rgba(255, 206, 86, 0.2)",
+                              "rgba(75, 192, 192, 0.2)",
+                              "rgba(153, 102, 255, 0.2)",
+                              "rgba(255, 159, 64, 0.2)",
+                            ],
+                            borderColor: [
+                              "rgba(255, 99, 132, 1)",
+                              "rgba(54, 162, 235, 1)",
+                              "rgba(255, 206, 86, 1)",
+                              "rgba(75, 192, 192, 1)",
+                              "rgba(153, 102, 255, 1)",
+                              "rgba(255, 159, 64, 1)",
+                            ],
+                            borderWidth: 1,
+                          },
+                        ],
+                      }}
+                      height={200}
+                      width={400}
+                      options={{}}
+                    />
+                  </div>
+                </div>
               </Grid>
             </Grid>
           </Grid>
